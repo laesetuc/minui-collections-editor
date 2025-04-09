@@ -1,7 +1,7 @@
 {
-    "label": "Search",
+    "label": "Edit Recents",
     "launch": "launch.sh",
-    "description": "Searches for games from the ROMs folder based in input",
+    "description": "Edit the Recently Played games list",
     "platforms": [
         "tg5040"
     ]
