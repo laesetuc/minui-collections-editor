@@ -100,64 +100,24 @@ main() {
     echo "1" >/tmp/stay_awake
     trap "cleanup" EXIT INT TERM HUP QUIT
 
-    if ! command -v minui-presenter >/dev/null 2>&1; then
-        show_message "minui-presenter not found" 2
-        return 1
-    fi
-
     while true; do
 
-        search_list_file="/tmp/search-list"
-        results_list_file="/tmp/results-list"
-        previous_search_file="/tmp/search-term"
-        SEARCH_TERM=$(cat "$previous_search_file")
-
-        total=$(cat "$search_list_file" | wc -l)
-        if [ "$total" -eq 0 ]; then
-
-            # Get search term
-            killall minui-presenter >/dev/null 2>&1 || true
-            SEARCH_TERM="$(minui-keyboard --header "Search" --initial-value "$SEARCH_TERM")"
-            exit_code=$?
-            if [ "$exit_code" -eq 2 ]; then
-                >"$previous_search_file"
-                return 2
-            fi
-            if [ "$exit_code" -eq 3 ]; then
-                >"$previous_search_file"
-                return 3
-            fi
-            if [ "$exit_code" -ne 0 ]; then
-                show_message "Error entering search term" 2
-                return 1
-            fi
-            echo "$SEARCH_TERM" > "$previous_search_file"
-
-            # Perform search
-
-            show_message "Searching..."
-            #sleep 1
-
-            find "$SDCARD_PATH/Roms" -type f ! -path '*/\.*' -iname "*$SEARCH_TERM*" ! -name '*.txt' ! -name '*.log' > "$search_list_file"
-            total=$(cat "$search_list_file" | wc -l)
-
-            if [ "$total" -eq 0 ]; then
-                show_message "Could not find any games." 2
-                sleep 1
-            else
-                >"$results_list_file"
-                sed -e 's/[^(]*(//' -e 's/\// /' -e 's/\[[^]]*\]//g' -e 's/([^)]*)//g' -e 's/[[:space:]]*$//' -e 's/\.[^.]*$//' -e 's/^/(/' "$search_list_file" > "$results_list_file"
-            fi
-        fi
+        recents_list_file="/mnt/SDCARD/recents-list"
+        display_list_file="/tmp/display-list"
+        
+        # Parse the recents list
+        RECENTS="$SDCARD_PATH/.userdata/shared/.minui/recent.txt"
+        cut -f2 "$RECENTS" > "$results_list_file"
 
         # Display Results
 
-        total=$(cat "$search_list_file" | wc -l)
+        total=$(cat "$results_list_file" | wc -l)
         if [ "$total" -gt 0 ]; then
             killall minui-presenter >/dev/null 2>&1 || true
             selection=$(minui-list --file "$results_list_file" --format text --title "Search: $SEARCH_TERM ($total results)")
 
             exit_code=$?
+            
             if [ "$exit_code" -eq 0 ]; then
 
                 linenum=$(grep -n "$selection" "$results_list_file" | cut -d: -f1)
@@ -176,6 +136,11 @@ main() {
                 >"$results_list_file"
                 >"$search_list_file"
             fi
+        else
+            # No results found
+            killall minui-presenter >/dev/null 2>&1 || true
+            show_message "No recently played games found" 3
+            break
         fi
     done
 }
