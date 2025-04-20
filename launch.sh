@@ -13,7 +13,7 @@ cd "$PAK_DIR" || exit 1
 mkdir -p "$USERDATA_PATH/$PAK_NAME"
 
 architecture=arm
-if [ uname -m | grep -q '64' ]; then
+if [[ "$(uname -m)" == *"64"* ]]; then
     architecture=arm64
 fi
 
@@ -21,19 +21,13 @@ export HOME="$USERDATA_PATH/$PAK_NAME"
 export LD_LIBRARY_PATH="$PAK_DIR/lib:$LD_LIBRARY_PATH"
 export PATH="$PAK_DIR/bin/$architecture:$PAK_DIR/bin/$PLATFORM:$PAK_DIR/bin:$PATH"
 
-add_game_to_recents() {
-    FILEPATH="$1" GAME_ALIAS="$2"
+add_game_to_collection() {
+    FILEPATH="$1" COLLECTION="$2"
 
     FILEPATH="${FILEPATH#"$SDCARD_PATH/"}"
-    RECENTS="$SDCARD_PATH/.userdata/shared/.minui/recent.txt"
-    if [ -f "$RECENTS" ]; then
-        sed -i "#/$FILEPATH\t$GAME_ALIAS#d" "$RECENTS"
-    fi
+    COLLECTIONFILE="$SDCARD_PATH/Collections/$COLLECTION.txt"
 
-    rm -f "/tmp/recent.txt"
-    printf "%s\t%s\n" "/$FILEPATH" "$GAME_ALIAS" >"/tmp/recent.txt"
-    cat "$RECENTS" >>"/tmp/recent.txt"
-    mv "/tmp/recent.txt" "$RECENTS"
+    echo "$FILEPATH" >> "$COLLECTIONFILE"
 }
 
 get_rom_alias() {
@@ -102,45 +96,20 @@ main() {
 
     while true; do
 
-        recents_list_file="/mnt/SDCARD/recents-list"
-        display_list_file="/tmp/display-list"
+
+        # Get Collections
+        collections_list_file="/tmp/collections-list"
+        collection_dir="/mnt/SDCARD/Collections"
+
+        find "$collection_dir" -type f -name "*.txt" > "$collections_list_file"
         
-        # Parse the recents list
-        RECENTS="$SDCARD_PATH/.userdata/shared/.minui/recent.txt"
-        cut -f2 "$RECENTS" > "$results_list_file"
-
         # Display Results
-
-        total=$(cat "$results_list_file" | wc -l)
-        if [ "$total" -gt 0 ]; then
-            killall minui-presenter >/dev/null 2>&1 || true
-            selection=$(minui-list --file "$results_list_file" --format text --title "Search: $SEARCH_TERM ($total results)")
-
-            exit_code=$?
+        killall minui-presenter >/dev/null 2>&1 || true
+        selection=$(minui-list --file "$collections_list_file" --format text --title "Collections")
+        exit_code=$?
             
-            if [ "$exit_code" -eq 0 ]; then
+        if [ "$exit_code" -eq 0 ]; then
 
-                linenum=$(grep -n "$selection" "$results_list_file" | cut -d: -f1)
-                FILE=$(cat "$search_list_file" | head -n "$linenum" | tail -1)
-
-                EMU_FOLDER=$(get_emu_folder "$FILE")
-                EMU_NAME=$(get_emu_name "$EMU_FOLDER")
-                EMU_PATH=$(get_emu_path "$EMU_NAME")
-                ROM_ALIAS=$(get_rom_alias "$FILE")
-                rm -f /tmp/stay_awake
-
-                add_game_to_recents "$FILE" "$ROM_ALIAS"
-                killall minui-presenter >/dev/null 2>&1 || true
-                exec "$EMU_PATH" "$FILE"
-            else
-                >"$results_list_file"
-                >"$search_list_file"
-            fi
-        else
-            # No results found
-            killall minui-presenter >/dev/null 2>&1 || true
-            show_message "No recently played games found" 3
-            break
         fi
     done
 }

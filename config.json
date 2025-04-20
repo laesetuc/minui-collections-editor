@@ -1,7 +1,7 @@
 {
-    "label": "Edit Recents",
+    "label": "Collections Manager",
     "launch": "launch.sh",
-    "description": "Edit the Recently Played games list",
+    "description": "Manage game collections.",
     "platforms": [
         "tg5040"
     ]
