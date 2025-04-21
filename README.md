@@ -1,2 +1,2 @@
-# minui-collections-manager
-Utility for managing Collections
+# minui-collections-editor
+Utility for editing game collections
