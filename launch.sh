@@ -30,6 +30,26 @@ add_game_to_collection() {
     echo "$FILEPATH" >> "$COLLECTIONFILE"
 }
 
+add_new_collection() {
+    # Add new collection
+    killall minui-presenter >/dev/null 2>&1 || true
+    SEARCH_TERM="$(minui-keyboard --title "Name" --show-hardware-group)"
+    exit_code=$?
+    if [ "$exit_code" -eq 2 ]; then
+        >"$previous_search_file"
+        return 2
+    fi
+    if [ "$exit_code" -eq 3 ]; then
+        >"$previous_search_file"
+        return 3
+    fi
+    if [ "$exit_code" -ne 0 ]; then
+        show_message "Error entering search term" 2
+        return 1
+    fi
+    echo "$SEARCH_TERM" > "$previous_search_file"
+}
+
 get_rom_alias() {
     FILEPATH="$1"
     filename="$(basename "$FILEPATH")"
@@ -96,19 +116,63 @@ main() {
 
     while true; do
 
-
         # Get Collections
         collections_list_file="/tmp/collections-list"
-        collection_dir="/mnt/SDCARD/Collections"
+        collections_dir="/mnt/SDCARD/Collections"
+        exclude_list="map.txt"
 
-        find "$collection_dir" -type f -name "*.txt" > "$collections_list_file"
+        find "$collections_dir" -type f -name "*.txt" $(printf "! -name %s " $exclude_list) | sed -e "s|^$collections_dir/||" -e "s|\.txt$||" > "$collections_list_file"
         
         # Display Results
-        killall minui-presenter >/dev/null 2>&1 || true
-        selection=$(minui-list --file "$collections_list_file" --format text --title "Collections")
+        #killall minui-presenter >/dev/null 2>&1 || true
+        selection=$(minui-list --file "$collections_list_file" --format text --title "Collections" --confirm-text "EDIT" --action-button "X" --action-text "NEW")
         exit_code=$?
+
+        if [ "$exit_code" -eq 2 ] || [ "$exit_code" -eq 3 ]; then
+            # User pressed B or MENU button
+            return "$exit_code"
+        elif [ "$exit_code" -eq 4 ]; then
+            # User pressed X button
+            return 4
+        elif [ "$exit_code" -eq 0 ]; then
+            # User selected item to edit
+
+            # Get ROMs
+            collections_games_list="/tmp/collection-games-list"
+            collections_dir="/mnt/SDCARD/Collections"
+            collection_name="$selection"
+
+            #echo -e "- Add game to collection\n- Rename collection\n- Delete collection" | jq -R -s 'split("\n")[:-1]' > "$collections_games_list"
+
+            sed "$collections_dir"/"$selection".txt \
+                -e 's/^[^()]*(//' \
+                -e 's/)[^/]*\//) /' \
+                -e 's/\[[^]]*\]//g' \
+                -e 's/([^)]*)//g' \
+                -e 's/^/(/' \
+                -e 's/\.[^.]*$//' \
+                -e 's/[[:space:]]*$//' \
+                | jq -R -s 'split("\n")[:-1]' > "$collections_games_list"
             
-        if [ "$exit_code" -eq 0 ]; then
+            #cat "$collections_dir"/"$selection".txt | jq -R -s 'split("\n")[:-1]' > "$collections_games_list"
+            
+            # Display Results
+            # killall minui-presenter >/dev/null 2>&1 || true
+            # Note using minui-list v0.8.0 due to display bug wiht latest version.  old version uses stdout-value instead of write-value
+            selection=$(minui-list --file "$collections_games_list" --format json --stdout-value state --title "$collection_name")
+            exit_code=$?
+
+            if [ "$exit_code" -eq 2 ] || [ "$exit_code" -eq 3 ]; then
+                # User pressed B or MENU button
+                return "$exit_code"
+            elif [ "$exit_code" -eq 4 ]; then
+                # User pressed X button
+                return 4
+            elif [ "$exit_code" -eq 0 ]; then
+                # User selected item to edit
+                selected_index="$(echo "$selection" | jq -r '.selected')"
+                show_message "$selected_index" 2     
+            fi
 
         fi
     done

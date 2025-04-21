@@ -1,7 +1,7 @@
 {
-    "label": "Collections Manager",
+    "label": "Collections Editor",
     "launch": "launch.sh",
-    "description": "Manage game collections.",
+    "description": "Edit game collections.",
     "platforms": [
         "tg5040"
     ]
