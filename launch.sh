@@ -155,7 +155,7 @@ main() {
 
         if [ "$exit_code" -eq 2 ] || [ "$exit_code" -eq 3 ]; then
             # User pressed B or MENU button
-            return "$exit_code"
+            break
         elif [ "$exit_code" -eq 4 ]; then
             # Add new collection
             result="$(minui-keyboard --title "Add new collection" --show-hardware-group --disable-auto-sleep)"
@@ -175,116 +175,126 @@ main() {
             fi
         elif [ "$exit_code" -eq 0 ]; then
             # User selected item to edit
-            selected_index="$(echo "$selection" | jq -r '.selected')"
-            collection=$(echo "$selection" | jq -r '.""['"$selected_index"'].name')
 
-            echo -e "Add game to collection|Add last played game to collection|Edit games in collection|Rename collection|Remove collection" | jq -R -s 'split("|")' > "$menu_file"
-            selection=$(minui-list --file "$menu_file" --format json --write-value state --title "$collection" --disable-auto-sleep)
-            exit_code=$?
-
-            if [ "$exit_code" -eq 0 ]; then
-                # User selected item to edit
+            while true; do
                 selected_index="$(echo "$selection" | jq -r '.selected')"
+                collection=$(echo "$selection" | jq -r '.""['"$selected_index"'].name')
 
-                case "$selected_index" in
-                    0)
-                        # Add game to collection
-                        show_message "Add game to collection" 2
-                        ;;
-                    1)
-                        # Add last played game to collection
-                        recents_file="/mnt/SDCARD/.userdata/shared/.minui/recent.txt"
-                        if [ -s "$recents_file" ]; then
-                            show_message "No recent games" 2
-                        else
-                            # Get last played game
-                            rom_path=$(head -n 1 "$recents_file" | cut -d$'\t' -f1)
-                            rom_alias=$(head -n 1 "$recents_file"| cut -d$'\t' -f2)
-                            
-                            echo $rom_path >> "$collections_dir"/"$collection".txt
-                            show_message "Added $rom_alias to collection $collection" 2
-                        fi
-                        ;;
-                    2)
-                        # Edit games in collection
+                echo -e "Add game to collection|Add last played game to collection|Edit games in collection|Rename collection|Remove collection" | jq -R -s 'split("|")' > "$menu_file"
+                selection=$(minui-list --file "$menu_file" --format json --write-value state --title "$collection" --disable-auto-sleep)
+                exit_code=$?
 
-                        while true; do
-                            # Get ROMs
-                            collections_games_list="/tmp/collection-games-list"
-                            collections_dir="/mnt/SDCARD/Collections"
+                if [ "$exit_code" -eq 2 ] || [ "$exit_code" -eq 3 ]; then
+                    # User pressed B or MENU button
+                    break
+                elif [ "$exit_code" -eq 0 ]; then
+                    # User selected item to edit
+                    selected_index="$(echo "$selection" | jq -r '.selected')"
 
-                            sed "$collections_dir"/"$collection".txt \
-                                -e 's/^[^()]*(//' \
-                                -e 's/)[^/]*\//) /' \
-                                -e 's/\[[^]]*\]//g' \
-                                -e 's/([^)]*)//g' \
-                                -e 's/^/(/' \
-                                -e 's/\.[^.]*$//' \
-                                -e 's/[[:space:]]*$//' \
-                                | jq -R -s 'split("\n")[:-1]' > "$collections_games_list"
-                            
-                            if [ ! -s "$collections_games_list" ]; then
-                                show_message "No games in collection" 2
-                                return 1
-                            else                                
-                                # Display Results
-                                selection=$(minui-list --file "$collections_games_list" --format json --write-value state --title "$collection" --disable-auto-sleep)
-                                exit_code=$?
+                    case "$selected_index" in
+                        0)
+                            # Add game to collection
+                            show_message "Add game to collection" 2
+                            break
+                            ;;
+                        1)
+                            # Add last played game to collection
+                            recents_file="/mnt/SDCARD/.userdata/shared/.minui/recent.txt"
+                            if [ ! -s "$recents_file" ]; then
+                                show_message "No recent games" 2
+                            else
+                                # Get last played game
+                                rom_path=$(head -n 1 "$recents_file" | cut -d$'\t' -f1)
+                                rom_alias=$(head -n 1 "$recents_file"| cut -d$'\t' -f2)
+                                
+                                echo $rom_path >> "$collections_dir"/"$collection".txt
+                                show_message "Added $rom_alias to collection $collection" 2
+                            fi
+                            break
+                            ;;
+                        2)
+                            # Edit games in collection
 
-                                if [ "$exit_code" -eq 2 ] || [ "$exit_code" -eq 3 ]; then
-                                    # User pressed B or MENU button
-                                    return "$exit_code"
-                                elif [ "$exit_code" -eq 0 ]; then
-                                    # User selected item to edit
-                                    selected_index="$(echo "$selection" | jq -r '.selected')"
+                            while true; do
+                                # Get ROMs
+                                collections_games_list="/tmp/collection-games-list"
+                                collections_dir="/mnt/SDCARD/Collections"
 
-                                    echo -e "Remove game from collection" | jq -R -s 'split("|")' > "$menu_file"
-                                    selection=$(minui-list --file "$menu_file" --format json --write-value state --title "$collection" --disable-auto-sleep)
+                                sed "$collections_dir"/"$collection".txt \
+                                    -e 's/^[^()]*(//' \
+                                    -e 's/)[^/]*\//) /' \
+                                    -e 's/\[[^]]*\]//g' \
+                                    -e 's/([^)]*)//g' \
+                                    -e 's/^/(/' \
+                                    -e 's/\.[^.]*$//' \
+                                    -e 's/[[:space:]]*$//' \
+                                    | jq -R -s 'split("\n")[:-1]' > "$collections_games_list"
+                                
+                                if [ -z "$collections_games_list" ]; then
+                                    show_message "No games in collection" 2
+                                    break
+                                else                                
+                                    # Display Results
+                                    selection=$(minui-list --file "$collections_games_list" --format json --write-value state --title "$collection" --disable-auto-sleep)
                                     exit_code=$?
 
-                                    if [ "$exit_code" -eq 0 ]; then
+                                    if [ "$exit_code" -eq 2 ] || [ "$exit_code" -eq 3 ]; then
+                                        # User pressed B or MENU button
+                                        break
+                                    elif [ "$exit_code" -eq 0 ]; then
                                         # User selected item to edit
-                                        selected_index2="$(echo "$selection" | jq -r '.selected')"
+                                        selected_index="$(echo "$selection" | jq -r '.selected')"
 
-                                        case "$selected_index2" in
-                                            0)
-                                                # Remove game from collection
-                                                selected_game=$(sed -n "$((selected_index + 1))p" "$collections_dir/$collection.txt")
-                                                cp "$collections_dir"/"$collection".txt "$collections_dir"/"$collection".txt.bak
-                                                sed -i "$(($selected_index + 1))d" "$collections_dir"/"$collection".txt
-                                                show_message "Removed $selected_game" 2
-                                                ;;
-                                        esac 
+                                        echo -e "Remove game from collection" | jq -R -s 'split("|")' > "$menu_file"
+                                        selection=$(minui-list --file "$menu_file" --format json --write-value state --title "$collection" --disable-auto-sleep)
+                                        exit_code=$?
+
+                                        if [ "$exit_code" -eq 0 ]; then
+                                            # User selected item to edit
+                                            selected_index2="$(echo "$selection" | jq -r '.selected')"
+
+                                            case "$selected_index2" in
+                                                0)
+                                                    # Remove game from collection
+                                                    selected_game=$(sed -n "$((selected_index + 1))p" "$collections_dir/$collection.txt")
+                                                    cp "$collections_dir"/"$collection".txt "$collections_dir"/"$collection".txt.bak
+                                                    sed -i "$(($selected_index + 1))d" "$collections_dir"/"$collection".txt
+                                                    show_message "Removed $selected_game" 2
+                                                    ;;
+                                            esac
+                                        fi
+                                    fi
+                                fi
+                            done
+                            ;;
+                        3)
+                            # Rename collection
+                            result="$(minui-keyboard --title "Rename collection" --initial-value "$collection" --show-hardware-group --disable-auto-sleep)"
+                            exit_code=$?
+                            if [ "$exit_code" -eq 0 ]; then
+                                filename=$(echo "$result" | sed 's/[^a-zA-Z0-9_]//g')
+                                if [ -z "$filename" ]; then
+                                    show_message "Invalid collection name!" 2
+                                else
+                                    if [ -f "$collections_dir"/"$filename".txt ]; then
+                                        show_message "Collection already exists" 2
+                                    else
+                                        mv "$collections_dir"/"$collection".txt "$collections_dir"/"$filename".txt
+                                        show_message "Collection $collection renamed to $filename" 2
                                     fi
                                 fi
                             fi
-                        done
-                        ;;
-                    3)
-                        # Rename collection
-                        result="$(minui-keyboard --title "Rename collection" --initial-value "$collection" --show-hardware-group --disable-auto-sleep)"
-                        exit_code=$?
-                        if [ "$exit_code" -eq 0 ]; then
-                            filename=$(echo "$result" | sed 's/[^a-zA-Z0-9_]//g')
-                            if [ -z "$filename" ]; then
-                                show_message "Invalid collection name!" 2
-                            else
-                                if [ -f "$collections_dir"/"$filename".txt ]; then
-                                    show_message "Collection already exists" 2
-                                else
-                                    mv "$collections_dir"/"$collection".txt "$collections_dir"/"$filename".txt
-                                    show_message "Collection $collection renamed to $filename" 2
-                                fi
-                            fi
-                        fi 
-                        ;;
-                    4)
-                        # Delete collection
-                        mv "$collections_dir"/"$collection".txt "$collections_dir"/"$collection".txt.bak
-                        show_message "Collection renamed to $collection.txt.bak" 2
-                        ;;
-                esac 
-            fi
+                            break
+                            ;;
+                        4)
+                            # Delete collection
+                            mv "$collections_dir"/"$collection".txt "$collections_dir"/"$collection".txt.disabled
+                            show_message "Collection renamed to $collection.txt.disabled" 2
+                            break
+                            ;;
+                    esac 
+                fi
+            done
         fi
     done
 }
