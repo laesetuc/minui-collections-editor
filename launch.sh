@@ -1,8 +1,8 @@
 #!/bin/sh
+set -x
 PAK_DIR="$(dirname "$0")"
 PAK_NAME="$(basename "$PAK_DIR")"
 PAK_NAME="${PAK_NAME%.*}"
-[ -f "$USERDATA_PATH/$PAK_NAME/debug" ] && set -x
 
 rm -f "$LOGS_PATH/$PAK_NAME.txt"
 exec >>"$LOGS_PATH/$PAK_NAME.txt"
@@ -23,10 +23,11 @@ export PATH="$PAK_DIR/bin/$architecture:$PAK_DIR/bin/$PLATFORM:$PAK_DIR/bin:$PAT
 
 add_new_collection() {
     # Add new collection
-    result="$(minui-keyboard --title "Add new collection" --show-hardware-group)"
+    minui-keyboard --title "Add new collection" --show-hardware-group --write-location "$minui_ouptut_file"
     exit_code=$?
     if [ "$exit_code" -eq 0 ]; then
-        filename=$(echo "$result" | sed 's/[^a-zA-Z0-9_]//g')
+        output=$(cat "$minui_ouptut_file")
+        filename=$(echo "$output" | sed 's/[^a-zA-Z0-9_]//g')
         new_collection_file="$collections_dir"/"$filename".txt
 
         if [ -z "$filename" ]; then
@@ -83,8 +84,8 @@ edit_games_in_collection() {
                 -e 's/[[:space:]]*$//' \
                 | jq -R -s 'split("\n")[:-1]' > "$collections_games_list"
                                         
-            # Display Results
-            selection=$(minui-list --file "$collections_games_list" --format json --write-value state --title "$collection")
+            # Display Games List
+            minui-list --file "$collections_games_list" --format json --write-location "$minui_ouptut_file" --write-value state --title "$collection"
             exit_code=$?
 
             if [ "$exit_code" -eq 2 ] || [ "$exit_code" -eq 3 ]; then
@@ -92,24 +93,39 @@ edit_games_in_collection() {
                 break
             elif [ "$exit_code" -eq 0 ]; then
                 # User selected item to edit
-                selected_index="$(echo "$selection" | jq -r '.selected')"
+                output=$(cat "$minui_ouptut_file")
+                selected_index="$(echo "$output" | jq -r '.selected')"
+                selected_game=$(sed -n "$((selected_index + 1))p" "$collection_file")
 
                 # Display Sub Menu
-                echo -e "Remove game from collection" | jq -R -s 'split("|")' > "$menu_file"
-                selection=$(minui-list --file "$menu_file" --format json --write-value state --title "$collection")
+                echo -e "Remove game from collection|Copy game to other collection" | jq -R -s 'split("|")' > "$menu_file"
+                minui-list --file "$menu_file" --format json --write-location "$minui_ouptut_file" --write-value state --title "$collection"
                 exit_code=$?
 
                 if [ "$exit_code" -eq 0 ]; then
                     # User selected item to edit
-                    selected_index2="$(echo "$selection" | jq -r '.selected')"
+                    output=$(cat "$minui_ouptut_file")
+                    selected_index2="$(echo "$output" | jq -r '.selected')"
 
                     case "$selected_index2" in
                         0)
                             # Remove game from collection
-                            selected_game=$(sed -n "$((selected_index + 1))p" "$collection_file")
                             cp "$collection_file" "$collections_dir"/"$collection".disabled
                             sed -i "$(($selected_index + 1))d" "$collection_file"
                             show_message "Removed $selected_game" 2
+                            ;;
+                        1)
+                            # Copy game to other collection
+                            select_collection
+                            exit_code=$?
+                            if [ "$exit_code" -eq 0 ]; then
+                                output=$(cat "$minui_ouptut_file")
+                                selected_index3="$(echo "$output" | jq -r '.selected')"
+                                new_collection=$(echo "$output" | jq -r '.""['"$selected_index3"'].name')
+
+                                echo "$selected_game" >> "$collections_dir"/"$new_collection".txt
+                                show_message "Added $selected_game to collection $new_collection" 2
+                            fi
                             ;;
                     esac
                 fi
@@ -120,10 +136,11 @@ edit_games_in_collection() {
 
 rename_collection() {
     # Rename collection
-    result="$(minui-keyboard --title "Rename collection" --initial-value "$collection" --show-hardware-group)"
+    minui-keyboard --title "Rename collection" --initial-value "$collection" --show-hardware-group --write-location "$minui_ouptut_file"
     exit_code=$?
     if [ "$exit_code" -eq 0 ]; then
-        filename=$(echo "$result" | sed 's/[^a-zA-Z0-9_]//g')
+        output=$(cat "$minui_ouptut_file")
+        filename=$(echo "$ouptut" | sed 's/[^a-zA-Z0-9_]//g')
         new_collection_file="$collections_dir"/"$filename".txt
 
         if [ -z "$filename" ]; then
@@ -145,6 +162,14 @@ delete_collection() {
     show_message "Collection renamed to $collection.disabled" 2
 }
 
+select_collection() {
+    # Display list of collections and get selection
+    $flags=$1
+    find "$collections_dir" -type f -name "*txt" ! -name "map.txt" | sed -e "s|^$collections_dir/||" -e "s|\.txt$||" | jq -R -s 'split("\n")[:-1]' > "$collections_list_file"
+
+    minui-list --file "$collections_list_file" --format json --write-location "$minui_ouptut_file" --write-value state --title "Collections" "$flags"
+}
+
 show_message() {
     message="$1"
     seconds="$2"
@@ -164,6 +189,11 @@ show_message() {
 
 cleanup() {
     rm -f /tmp/stay_awake
+    rm -f "$collections_list_file"
+    rm -f "$menu_file"
+    rm -f "$collections_games_list"
+    rm -f "$minui_output_file"
+
     killall minui-presenter >/dev/null 2>&1 || true
 }
 
@@ -171,17 +201,14 @@ main() {
     echo "1" >/tmp/stay_awake
     trap "cleanup" EXIT INT TERM HUP QUIT
 
+    collections_list_file="/tmp/collections-list"
+    collections_dir="/mnt/SDCARD/Collections"
+    menu_file="/tmp/collections-menu"
+    minui_ouptut_file="/tmp/minui-output"
+
     while true; do
-
         # Get Collections
-        collections_list_file="/tmp/collections-list"
-        collections_dir="/mnt/SDCARD/Collections"
-        menu_file="/tmp/collections-menu"
-
-        find "$collections_dir" -type f -name "*txt" ! -name "map.txt" | sed -e "s|^$collections_dir/||" -e "s|\.txt$||" | jq -R -s 'split("\n")[:-1]' > "$collections_list_file"
-   
-        # Display List of Collections
-        selection=$(minui-list --file "$collections_list_file" --format json --write-value state --title "Collections" --action-button "X" --action-text "ADD NEW")
+        select_collection '--action-button "X" --action-text "ADD NEW"'
         exit_code=$?
 
         if [ "$exit_code" -eq 2 ] || [ "$exit_code" -eq 3 ]; then
@@ -193,13 +220,14 @@ main() {
 
         elif [ "$exit_code" -eq 0 ]; then
             # User selected item to edit
-            selected_index="$(echo "$selection" | jq -r '.selected')"
-            collection=$(echo "$selection" | jq -r '.""['"$selected_index"'].name')
+            output=$(cat "$minui_ouptut_file")
+            selected_index="$(echo "$output" | jq -r '.selected')"
+            collection=$(echo "$output" | jq -r '.""['"$selected_index"'].name')
             collection_file="$collections_dir"/"$collection".txt
 
             while true; do
                 echo -e "Add game to collection|Add last played game to collection|Edit games in collection|Rename collection|Remove collection" | jq -R -s 'split("|")' > "$menu_file"
-                selection=$(minui-list --file "$menu_file" --format json --write-value state --title "$collection")
+                minui-list --file "$menu_file" --format json --write-location "$minui_ouptut_file" --write-value state --title "$collection"
                 exit_code=$?
 
                 if [ "$exit_code" -eq 2 ] || [ "$exit_code" -eq 3 ]; then
@@ -207,7 +235,8 @@ main() {
                     break
                 elif [ "$exit_code" -eq 0 ]; then
                     # User selected item to edit
-                    selected_index="$(echo "$selection" | jq -r '.selected')"
+                    output=$(cat "$minui_ouptut_file")
+                    selected_index="$(echo "$output" | jq -r '.selected')"
 
                     case "$selected_index" in
                         0)
