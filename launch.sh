@@ -98,6 +98,7 @@ add_game_to_collection() {
                 selected_index="$(echo "$output" | jq -r '.selected')"
                 file=$(sed -n "$((selected_index + 1))p" "$search_list_file")
 
+                echo $file >> $collection_file
                 show_message "Added $file to $collection" 2
             else
                 >"$results_list_file"
