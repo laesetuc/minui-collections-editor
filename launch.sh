@@ -45,7 +45,66 @@ add_new_collection() {
 
 add_game_to_collection() {
     # Add game to collection
-    show_message "Add game to collection" 2
+    search_list_file="/tmp/search-list"
+    results_list_file="/tmp/results-list"
+    previous_search_file="/tmp/search-term"
+
+    while true; do
+        search_term=$(cat "$previous_search_file")
+
+        total=$(cat "$search_list_file" | wc -l)
+        if [ "$total" -eq 0 ]; then
+
+            # Get search term
+            killall minui-presenter >/dev/null 2>&1 || true
+            minui-keyboard --title "Search" --initial-value "$search_term" --show-hardware-group --write-location "$minui_ouptut_file" --disable-auto-sleep 
+            exit_code=$?
+            if [ "$exit_code" -eq 2 ] || [ "$exit_code" -eq 3 ]; then
+                >"$previous_search_file"
+                break
+            fi
+            if [ "$exit_code" -ne 0 ]; then
+                show_message "Error entering search term" 2
+                break
+            fi
+            search_term=$(cat "$minui_ouptut_file")
+            echo "$search_term" > "$previous_search_file"
+
+            # Perform search
+            show_message "Searching..."
+
+            find "/mnt/SDCARD/Roms" -type f ! -path '*/\.*' -iname "*$search_term*" ! -name '*.txt' ! -name '*.log' > "$search_list_file"
+            total=$(cat "$search_list_file" | wc -l)
+
+            if [ "$total" -eq 0 ]; then
+                show_message "Could not find any games." 2
+            else
+                >"$results_list_file"
+                sed "$search_list_file" \
+                    -e 's/^[^(]*(/(/' \
+                    -e 's/)[^/]*\//) /' \
+                    -e 's/[[:space:]]*$//' \
+                    | jq -R -s 'split("\n")[:-1]' > "$results_list_file"
+            fi
+        fi
+
+        # Display Results
+        total=$(cat "$search_list_file" | wc -l)
+        if [ "$total" -gt 0 ]; then
+            minui-list --file "$results_list_file" --format json --write-location "$minui_ouptut_file" --write-value state --disable-auto-sleep --title "Search: $search_term ($total results)"
+            exit_code=$?
+            if [ "$exit_code" -eq 0 ]; then
+                output=$(cat "$minui_ouptut_file")
+                selected_index="$(echo "$output" | jq -r '.selected')"
+                file=$(sed -n "$((selected_index + 1))p" "$search_list_file")
+
+                show_message "Added $file to $collection" 2
+            else
+                >"$results_list_file"
+                >"$search_list_file"
+            fi
+        fi
+    done
 }
 
 add_recent_to_collection() {
