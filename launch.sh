@@ -98,7 +98,7 @@ add_game_to_collection() {
                 selected_index="$(echo "$output" | jq -r '.selected')"
                 file=$(sed -n "$((selected_index + 1))p" "$search_list_file")
 
-                echo $file >> $collection_file
+                echo "$file" >> "$collection_file"
                 show_message "Added $file to $collection" 2
             else
                 >"$results_list_file"
@@ -118,7 +118,7 @@ add_recent_to_collection() {
         rom_path=$(head -n 1 "$recents_file" | cut -d$'\t' -f1)
         rom_alias=$(head -n 1 "$recents_file"| cut -d$'\t' -f2)
         
-        echo $rom_path >> "$collection_file"
+        echo "$rom_path" >> "$collection_file"
         show_message "Added $rom_alias to collection $collection" 2
     fi
 }
@@ -224,10 +224,14 @@ delete_collection() {
 
 select_collection() {
     # Display list of collections and get selection
-    flags="$1"
+    show_add_button="$1"
     find "$collections_dir" -type f -name "*txt" ! -name "map.txt" | sed -e "s|^$collections_dir/||" -e "s|\.txt$||" | jq -R -s 'split("\n")[:-1]' > "$collections_list_file"
 
-    minui-list --file "$collections_list_file" --format json --write-location "$minui_ouptut_file" --write-value state --title "Collections" "$flags"
+    if [ -z "$show_add_button"]; then
+        minui-list --file "$collections_list_file" --format json --write-location "$minui_ouptut_file" --write-value state --title "Collections" --action-button "X" --action-text "ADD NEW"
+    else
+        minui-list --file "$collections_list_file" --format json --write-location "$minui_ouptut_file" --write-value state --title "Collections"
+    fi    
 }
 
 show_message() {
@@ -268,7 +272,7 @@ main() {
 
     while true; do
         # Get Collections
-        select_collection '--action-button "X" --action-text "ADD NEW"'
+        select_collection "add"
         exit_code=$?
 
         if [ "$exit_code" -eq 2 ] || [ "$exit_code" -eq 3 ]; then
