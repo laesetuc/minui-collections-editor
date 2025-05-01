@@ -2,7 +2,7 @@
 PAK_DIR="$(dirname "$0")"
 PAK_NAME="$(basename "$PAK_DIR")"
 PAK_NAME="${PAK_NAME%.*}"
-[ -f "$USERDATA_PATH/$PAK_NAME/debug" ] && set -x
+ set -x
 
 rm -f "$LOGS_PATH/$PAK_NAME.txt"
 exec >>"$LOGS_PATH/$PAK_NAME.txt"
@@ -95,11 +95,13 @@ add_game_to_collection() {
             exit_code=$?
             if [ "$exit_code" -eq 0 ]; then
                 output=$(cat "$minui_ouptut_file")
-                selected_index="$(echo "$output" | jq -r '.selected')"
-                file=$(sed -n "$((selected_index + 1))p" "$search_list_file")
+                selected_index4="$(echo "$output" | jq -r '.selected')"
+                file=$(sed -n "$((selected_index4 + 1))p" "$search_list_file")
+                filepath="${file#"$SDCARD_PATH/"}"
 
-                echo "$file" >> "$collection_file"
+                echo "/$filepath" >> "$collection_file"
                 show_message "Added $file to $collection" 2
+                break
             else
                 >"$results_list_file"
                 >"$search_list_file"
@@ -227,7 +229,7 @@ select_collection() {
     show_add_button="$1"
     find "$collections_dir" -type f -name "*txt" ! -name "map.txt" | sed -e "s|^$collections_dir/||" -e "s|\.txt$||" | jq -R -s 'split("\n")[:-1]' > "$collections_list_file"
 
-    if [ -z "$show_add_button"]; then
+    if [ "$show_add_button" = "add" ]; then
         minui-list --file "$collections_list_file" --format json --write-location "$minui_ouptut_file" --write-value state --title "Collections" --action-button "X" --action-text "ADD NEW"
     else
         minui-list --file "$collections_list_file" --format json --write-location "$minui_ouptut_file" --write-value state --title "Collections"
