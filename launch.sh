@@ -224,7 +224,7 @@ delete_collection() {
 
 select_collection() {
     # Display list of collections and get selection
-    flags=$1
+    flags="$1"
     find "$collections_dir" -type f -name "*txt" ! -name "map.txt" | sed -e "s|^$collections_dir/||" -e "s|\.txt$||" | jq -R -s 'split("\n")[:-1]' > "$collections_list_file"
 
     minui-list --file "$collections_list_file" --format json --write-location "$minui_ouptut_file" --write-value state --title "Collections" "$flags"
