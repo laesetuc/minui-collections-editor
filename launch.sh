@@ -21,6 +21,14 @@ export HOME="$USERDATA_PATH/$PAK_NAME"
 export LD_LIBRARY_PATH="$PAK_DIR/lib:$LD_LIBRARY_PATH"
 export PATH="$PAK_DIR/bin/$architecture:$PAK_DIR/bin/$PLATFORM:$PAK_DIR/bin:$PATH"
 
+get_rom_alias() {
+    filepath="$1"
+    filename="$(basename "$filepath")"
+    filename="${filename%.*}"
+    filename=$(echo "$filename" | sed -e 's/([^)]*)//g' -e 's/\[[^]]*\]//g' -e 's/[[:space:]]*$//')
+    echo "$filename"
+}
+
 add_new_collection() {
     # Add new collection
     minui-keyboard --title "Add new collection" --show-hardware-group --write-location "$minui_ouptut_file"
@@ -97,11 +105,11 @@ add_game_to_collection() {
                 output=$(cat "$minui_ouptut_file")
                 selected_index4="$(echo "$output" | jq -r '.selected')"
                 file=$(sed -n "$((selected_index4 + 1))p" "$search_list_file")
-                filepath="${file#"$SDCARD_PATH/"}"
+                filepath="${file#"$SDCARD_PATH"}"
+                rom_alias=$(get_rom_alias "$file")
 
-                echo "/$filepath" >> "$collection_file"
-                show_message "Added $file to $collection" 2
-                break
+                echo "$filepath" >> "$collection_file"
+                show_message "Added $rom_alias to $collection" 2
             else
                 >"$results_list_file"
                 >"$search_list_file"
@@ -227,7 +235,8 @@ delete_collection() {
 select_collection() {
     # Display list of collections and get selection
     show_add_button="$1"
-    find "$collections_dir" -type f -name "*txt" ! -name "map.txt" | sed -e "s|^$collections_dir/||" -e "s|\.txt$||" | jq -R -s 'split("\n")[:-1]' > "$collections_list_file"
+    find "$collections_dir" -type f -name "*txt" ! -name "map.txt" > "$collections_raw_file" 
+    sed -e "s|^$collections_dir/||" -e "s|\.txt$||" "$collections_raw_file" > jq -R -s 'split("\n")[:-1]' > "$collections_list_file"
 
     if [ "$show_add_button" = "add" ]; then
         minui-list --file "$collections_list_file" --format json --write-location "$minui_ouptut_file" --write-value state --title "Collections" --action-button "X" --action-text "ADD NEW"
@@ -256,6 +265,7 @@ show_message() {
 cleanup() {
     rm -f /tmp/stay_awake
     rm -f "$collections_list_file"
+    rm -f "$collections_raw_file"
     rm -f "$menu_file"
     rm -f "$collections_games_list"
     rm -f "$minui_output_file"
@@ -268,6 +278,7 @@ main() {
     trap "cleanup" EXIT INT TERM HUP QUIT
 
     collections_list_file="/tmp/collections-list"
+    collections_raw_file="/tmp/collections-raw"
     collections_dir="/mnt/SDCARD/Collections"
     menu_file="/tmp/collections-menu"
     minui_ouptut_file="/tmp/minui-output"
@@ -289,7 +300,8 @@ main() {
             output=$(cat "$minui_ouptut_file")
             selected_index="$(echo "$output" | jq -r '.selected')"
             collection=$(echo "$output" | jq -r '.""['"$selected_index"'].name')
-            collection_file="$collections_dir"/"$collection".txt
+            collection_file=$(sed -n "$((selected_index + 1))p" "$collections_raw_file")
+            echo "$collection_file"
 
             while true; do
                 echo -e "Add game to collection|Add last played game to collection|Edit games in collection|Rename collection|Remove collection" | jq -R -s 'split("|")' > "$menu_file"
