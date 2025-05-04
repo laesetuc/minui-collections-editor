@@ -64,7 +64,6 @@ add_game_to_collection() {
         if [ "$total" -eq 0 ]; then
 
             # Get search term
-            killall minui-presenter >/dev/null 2>&1 || true
             minui-keyboard --title "Search" --initial-value "$search_term" --show-hardware-group --write-location "$minui_output_file" --disable-auto-sleep 
             exit_code=$?
             if [ "$exit_code" -eq 2 ] || [ "$exit_code" -eq 3 ]; then
@@ -81,7 +80,7 @@ add_game_to_collection() {
             # Perform search
             show_message "Searching..."
 
-            find "/mnt/SDCARD/Roms" -type f ! -path '*/\.*' -iname "*$search_term*" ! -name '*.txt' ! -name '*.log' | sort > "$search_list_file"
+            find "/mnt/SDCARD/Roms" -type f ! -path '*/\.*' -iname "*$search_term*" ! -name '*.txt' ! -name '*.log' > "$search_list_file"
             total=$(cat "$search_list_file" | wc -l)
 
             if [ "$total" -eq 0 ]; then
@@ -126,7 +125,7 @@ add_recent_to_collection() {
     else
         # Get last played game
         rom_path=$(head -n 1 "$recents_file" | cut -d$'\t' -f1)
-        rom_alias=$(head -n 1 "$recents_file"| cut -d$'\t' -f2)
+        rom_alias=$(head -n 1 "$recents_file" | cut -d$'\t' -f2)
         
         echo "$rom_path" >> "$collection_file"
         show_message "Added $rom_alias to collection $collection" 2
@@ -138,13 +137,15 @@ edit_games_in_collection() {
     while true; do
         # Get ROMs
         collections_games_list="/tmp/collection-games-list"
+        collection_file_sorted="/tmp/collection-file-sorted"
         
         if [ ! -s "$collection_file" ]; then
             show_message "Collection is empty" 2
             break
         else
             # Get games in collection
-            sed "$collection_file" \
+            sort -f "$collection_file" > "$collection_file_sorted"
+            sed "$collection_file_sorted" \
                 -e 's/^[^()]*(//' \
                 -e 's/)[^/]*\//) /' \
                 -e 's/\[[^]]*\]//g' \
@@ -165,7 +166,7 @@ edit_games_in_collection() {
                 # User selected item to edit
                 output=$(cat "$minui_output_file")
                 selected_index="$(echo "$output" | jq -r '.selected')"
-                selected_game=$(sed -n "$((selected_index + 1))p" "$collection_file")
+                selected_game=$(sed -n "$((selected_index + 1))p" "$collection_file_sorted")
 
                 # Display Sub Menu
                 echo -e "Remove game from collection|Copy game to other collection" | jq -R -s 'split("|")' > "$menu_file"
@@ -180,9 +181,10 @@ edit_games_in_collection() {
                     case "$selected_index2" in
                         0)
                             # Remove game from collection
-                            cp "$collection_file" "$collections_dir"/"$collection".disabled
-                            sed -i "$(($selected_index + 1))d" "$collection_file"
-                            show_message "Removed $selected_game" 2
+                            cp "$collection_file" "$collection_file".disabled
+                            grep -v "$selected_game" "$collection_file".disabled > "$collection_file"
+                            rom_alias=$(get_rom_alias "$selected_game")
+                            show_message "Removed $rom_alias from $collection" 2
                             ;;
                         1)
                             # Copy game to other collection
@@ -194,7 +196,8 @@ edit_games_in_collection() {
                                 new_collection=$(echo "$output" | jq -r '.""['"$selected_index3"'].name')
 
                                 echo "$selected_game" >> "$collections_dir"/"$new_collection".txt
-                                show_message "Added $selected_game to collection $new_collection" 2
+                                rom_alias=$(get_rom_alias "$selected_game")
+                                show_message "Added $rom_alias to collection $new_collection" 2
                             fi
                             ;;
                     esac
@@ -228,14 +231,14 @@ rename_collection() {
 
 delete_collection() {
     # Delete collection
-    mv "$collection_file" "$collections_dir"/"$collection".disabled
+    mv "$collection_file" "$collection_file".disabled
     show_message "Collection renamed to $collection.disabled" 2
 }
 
 select_collection() {
     # Display list of collections and get selection
     show_add_button="$1"
-    find "$collections_dir" -type f -name "*txt" ! -name "map.txt" | sort > "$collections_raw_file" 
+    find "$collections_dir" -type f -name "*txt" ! -name "map.txt" | sort -f > "$collections_raw_file" 
     sed -e "s|^$collections_dir/||" -e "s|\.txt$||" "$collections_raw_file" | jq -R -s 'split("\n")[:-1]' > "$collections_list_file"
 
     if [ "$show_add_button" = "add" ]; then
@@ -268,6 +271,7 @@ cleanup() {
     rm -f "$collections_raw_file"
     rm -f "$menu_file"
     rm -f "$collections_games_list"
+    rm -f "$collection_file_sorted"
     rm -f "$minui_output_file"
 
     killall minui-presenter >/dev/null 2>&1 || true
