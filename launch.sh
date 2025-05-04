@@ -51,6 +51,43 @@ add_new_collection() {
     fi
 }
 
+select_game_to_add() {
+    total=$(cat "$search_list_file" | wc -l)
+
+    if [ "$total" -eq 0 ]; then
+        show_message "Could not find any games." 2
+    else
+        sed "$search_list_file" \
+            -e 's/^[^(]*(/(/' \
+            -e 's/)[^/]*\//) /' \
+            -e 's/[[:space:]]*$//' \
+            | jq -R -s 'split("\n")[:-1]' > "$results_list_file"
+
+        # Display list of games to add and get selection
+        minui-list --file "$results_list_file" --format json --write-location "$minui_output_file" --write-value state --disable-auto-sleep --title "Search: $search_term ($total results)"
+        exit_code=$?
+        if [ "$exit_code" -eq 0 ]; then
+            output=$(cat "$minui_output_file")
+            selected_index4="$(echo "$output" | jq -r '.selected')"
+            file=$(sed -n "$((selected_index4 + 1))p" "$search_list_file")
+
+            filepath="${file#"$SDCARD_PATH"}"
+            rom_alias=$(get_rom_alias "$file")
+
+            if grep -q "$filepath" "$collection_file"; then
+                show_message "Game already in collection" 2
+            else
+
+                echo "$filepath" >> "$collection_file"
+                show_message "Added $rom_alias to $collection" 2
+            fi
+        else
+            >"$results_list_file"
+            >"$search_list_file"
+        fi
+    fi
+}
+
 add_game_to_collection() {
     # Add game to collection
     search_list_file="/tmp/search-list"
@@ -86,13 +123,13 @@ add_game_to_collection() {
             if [ "$total" -eq 0 ]; then
                 show_message "Could not find any games." 2
             else
-                >"$results_list_file"
                 sed "$search_list_file" \
                     -e 's/^[^(]*(/(/' \
                     -e 's/)[^/]*\//) /' \
                     -e 's/[[:space:]]*$//' \
                     | jq -R -s 'split("\n")[:-1]' > "$results_list_file"
 
+                # Display list of games to add and get selection
                 minui-list --file "$results_list_file" --format json --write-location "$minui_output_file" --write-value state --disable-auto-sleep --title "Search: $search_term ($total results)"
                 exit_code=$?
                 if [ "$exit_code" -eq 0 ]; then
@@ -139,6 +176,22 @@ add_recent_to_collection() {
                 show_message "Added $rom_alias to collection $collection" 2
             fi
         fi
+    fi
+}
+
+add_recents_to_collection() {
+    # Add game from recents list to collection
+    recents_file="/mnt/SDCARD/.userdata/shared/.minui/recent.txt"
+    search_list_file="/tmp/search-list"
+    results_list_file="/tmp/results-list"
+
+    if [ ! -s "$recents_file" ]; then
+        show_message "No recent games" 2
+    else
+        search_term="Recents"
+        cut -d$'\t' -f1 "$recents_file" > "$search_list_file"
+
+        select_game_to_add
     fi
 }
 
@@ -315,7 +368,7 @@ main() {
             echo "$collection_file"
 
             while true; do
-                echo -e "Add game to collection|Add last played game to collection|Edit games in collection|Rename collection|Remove collection" | jq -R -s 'split("|")' > "$menu_file"
+                echo -e "Add game to collection|Add from recents to collection|Edit games in collection|Rename collection|Remove collection" | jq -R -s 'split("|")' > "$menu_file"
                 minui-list --file "$menu_file" --format json --write-location "$minui_output_file" --write-value state --title "$collection" --disable-auto-sleep
                 exit_code=$?
 
@@ -334,7 +387,7 @@ main() {
                             ;;
                         1)
                             # Add last played game to collection
-                            add_recent_to_collection
+                            add_recents_to_collection
                             ;;
                         2)
                             # Edit games in collection
