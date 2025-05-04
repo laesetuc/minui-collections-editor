@@ -31,7 +31,7 @@ get_rom_alias() {
 
 add_new_collection() {
     # Add new collection
-    minui-keyboard --title "Add new collection" --show-hardware-group --write-location "$minui_output_file"
+    minui-keyboard --title "Add new collection" --show-hardware-group --write-location "$minui_output_file" --disable-auto-sleep
     exit_code=$?
     if [ "$exit_code" -eq 0 ]; then
         output=$(cat "$minui_output_file")
@@ -155,7 +155,7 @@ edit_games_in_collection() {
                 | jq -R -s 'split("\n")[:-1]' > "$collections_games_list"
                                         
             # Display Games List
-            minui-list --file "$collections_games_list" --format json --write-location "$minui_output_file" --write-value state --title "$collection"
+            minui-list --file "$collections_games_list" --format json --write-location "$minui_output_file" --write-value state --title "$collection" --disable-auto-sleep
             exit_code=$?
 
             if [ "$exit_code" -eq 2 ] || [ "$exit_code" -eq 3 ]; then
@@ -169,7 +169,7 @@ edit_games_in_collection() {
 
                 # Display Sub Menu
                 echo -e "Remove game from collection|Copy game to other collection" | jq -R -s 'split("|")' > "$menu_file"
-                minui-list --file "$menu_file" --format json --write-location "$minui_output_file" --write-value state --title "$collection"
+                minui-list --file "$menu_file" --format json --write-location "$minui_output_file" --write-value state --title "$collection" --disable-auto-sleep
                 exit_code=$?
 
                 if [ "$exit_code" -eq 0 ]; then
@@ -206,7 +206,7 @@ edit_games_in_collection() {
 
 rename_collection() {
     # Rename collection
-    minui-keyboard --title "Rename collection" --initial-value "$collection" --show-hardware-group --write-location "$minui_output_file"
+    minui-keyboard --title "Rename collection" --initial-value "$collection" --show-hardware-group --write-location "$minui_output_file" --disable-auto-sleep
     exit_code=$?
     if [ "$exit_code" -eq 0 ]; then
         output=$(cat "$minui_output_file")
@@ -239,9 +239,9 @@ select_collection() {
     sed -e "s|^$collections_dir/||" -e "s|\.txt$||" "$collections_raw_file" | jq -R -s 'split("\n")[:-1]' > "$collections_list_file"
 
     if [ "$show_add_button" = "add" ]; then
-        minui-list --file "$collections_list_file" --format json --write-location "$minui_output_file" --write-value state --title "Collections" --action-button "X" --action-text "ADD NEW"
+        minui-list --file "$collections_list_file" --format json --write-location "$minui_output_file" --write-value state --title "Collections" --disable-auto-sleep --action-button "X" --action-text "ADD NEW" 
     else
-        minui-list --file "$collections_list_file" --format json --write-location "$minui_output_file" --write-value state --title "Collections"
+        minui-list --file "$collections_list_file" --format json --write-location "$minui_output_file" --write-value state --title "Collections" --disable-auto-sleep
     fi    
 }
 
@@ -305,7 +305,7 @@ main() {
 
             while true; do
                 echo -e "Add game to collection|Add last played game to collection|Edit games in collection|Rename collection|Remove collection" | jq -R -s 'split("|")' > "$menu_file"
-                minui-list --file "$menu_file" --format json --write-location "$minui_output_file" --write-value state --title "$collection"
+                minui-list --file "$menu_file" --format json --write-location "$minui_output_file" --write-value state --title "$collection" --disable-auto-sleep
                 exit_code=$?
 
                 if [ "$exit_code" -eq 2 ] || [ "$exit_code" -eq 3 ]; then
