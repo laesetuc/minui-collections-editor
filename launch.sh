@@ -92,32 +92,28 @@ add_game_to_collection() {
                     -e 's/)[^/]*\//) /' \
                     -e 's/[[:space:]]*$//' \
                     | jq -R -s 'split("\n")[:-1]' > "$results_list_file"
-            fi
-        fi
 
-        # Display Results
-        total=$(cat "$search_list_file" | wc -l)
-        if [ "$total" -gt 0 ]; then
-            minui-list --file "$results_list_file" --format json --write-location "$minui_output_file" --write-value state --disable-auto-sleep --title "Search: $search_term ($total results)"
-            exit_code=$?
-            if [ "$exit_code" -eq 0 ]; then
-                output=$(cat "$minui_output_file")
-                selected_index4="$(echo "$output" | jq -r '.selected')"
-                file=$(sed -n "$((selected_index4 + 1))p" "$search_list_file")
+                minui-list --file "$results_list_file" --format json --write-location "$minui_output_file" --write-value state --disable-auto-sleep --title "Search: $search_term ($total results)"
+                exit_code=$?
+                if [ "$exit_code" -eq 0 ]; then
+                    output=$(cat "$minui_output_file")
+                    selected_index4="$(echo "$output" | jq -r '.selected')"
+                    file=$(sed -n "$((selected_index4 + 1))p" "$search_list_file")
 
-                filepath="${file#"$SDCARD_PATH"}"
-                rom_alias=$(get_rom_alias "$file")
+                    filepath="${file#"$SDCARD_PATH"}"
+                    rom_alias=$(get_rom_alias "$file")
 
-                if grep -q "$filepath" "$collection_file"; then
-                    show_message "Game already in collection" 2
+                    if grep -q "$filepath" "$collection_file"; then
+                        show_message "Game already in collection" 2
+                    else
+
+                        echo "$filepath" >> "$collection_file"
+                        show_message "Added $rom_alias to $collection" 2
+                    fi
                 else
-
-                    echo "$filepath" >> "$collection_file"
-                    show_message "Added $rom_alias to $collection" 2
+                    >"$results_list_file"
+                    >"$search_list_file"
                 fi
-            else
-                >"$results_list_file"
-                >"$search_list_file"
             fi
         fi
     done
@@ -157,7 +153,7 @@ edit_games_in_collection() {
             break
         else
             # Get games in collection
-\            sed "$collection_file" \
+            sed "$collection_file" \
                 -e 's/^[^()]*(//' \
                 -e 's/)[^/]*\//) /' \
                 -e 's/\[[^]]*\]//g' \
