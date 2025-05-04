@@ -151,15 +151,13 @@ edit_games_in_collection() {
     while true; do
         # Get ROMs
         collections_games_list="/tmp/collection-games-list"
-        collection_file_sorted="/tmp/collection-file-sorted"
         
         if [ ! -s "$collection_file" ]; then
             show_message "Collection is empty" 2
             break
         else
             # Get games in collection
-            sort -f "$collection_file" > "$collection_file_sorted"
-            sed "$collection_file_sorted" \
+\            sed "$collection_file" \
                 -e 's/^[^()]*(//' \
                 -e 's/)[^/]*\//) /' \
                 -e 's/\[[^]]*\]//g' \
@@ -180,7 +178,7 @@ edit_games_in_collection() {
                 # User selected item to edit
                 output=$(cat "$minui_output_file")
                 selected_index="$(echo "$output" | jq -r '.selected')"
-                selected_game=$(sed -n "$((selected_index + 1))p" "$collection_file_sorted")
+                selected_game=$(sed -n "$((selected_index + 1))p" "$collection_file")
 
                 # Display Sub Menu
                 echo -e "Remove game from collection|Copy game to other collection" | jq -R -s 'split("|")' > "$menu_file"
@@ -285,7 +283,6 @@ cleanup() {
     rm -f "$collections_raw_file"
     rm -f "$menu_file"
     rm -f "$collections_games_list"
-    rm -f "$collection_file_sorted"
     rm -f "$minui_output_file"
 
     killall minui-presenter >/dev/null 2>&1 || true
