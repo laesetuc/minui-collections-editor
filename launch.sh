@@ -104,11 +104,17 @@ add_game_to_collection() {
                 output=$(cat "$minui_output_file")
                 selected_index4="$(echo "$output" | jq -r '.selected')"
                 file=$(sed -n "$((selected_index4 + 1))p" "$search_list_file")
+
                 filepath="${file#"$SDCARD_PATH"}"
                 rom_alias=$(get_rom_alias "$file")
 
-                echo "$filepath" >> "$collection_file"
-                show_message "Added $rom_alias to $collection" 2
+                if grep -q "$filepath" "$collection_file"; then
+                    show_message "Game already in collection" 2
+                else
+
+                    echo "$filepath" >> "$collection_file"
+                    show_message "Added $rom_alias to $collection" 2
+                fi
             else
                 >"$results_list_file"
                 >"$search_list_file"
@@ -126,9 +132,17 @@ add_recent_to_collection() {
         # Get last played game
         rom_path=$(head -n 1 "$recents_file" | cut -d$'\t' -f1)
         rom_alias=$(head -n 1 "$recents_file" | cut -d$'\t' -f2)
-        
-        echo "$rom_path" >> "$collection_file"
-        show_message "Added $rom_alias to collection $collection" 2
+
+        if [ ! -f "$SDCARD_PATH$rom_path" ]; then
+            show_message "Invalid game!" 2
+        else        
+            if grep -q "$rom_path" "$collection_file"; then
+                show_message "Game already in collection" 2
+            else
+                echo "$rom_path" >> "$collection_file"
+                show_message "Added $rom_alias to collection $collection" 2
+            fi
+        fi
     fi
 }
 
