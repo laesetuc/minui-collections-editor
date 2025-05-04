@@ -81,7 +81,7 @@ add_game_to_collection() {
             # Perform search
             show_message "Searching..."
 
-            find "/mnt/SDCARD/Roms" -type f ! -path '*/\.*' -iname "*$search_term*" ! -name '*.txt' ! -name '*.log' > "$search_list_file"
+            find "/mnt/SDCARD/Roms" -type f ! -path '*/\.*' -iname "*$search_term*" ! -name '*.txt' ! -name '*.log' | sort > "$search_list_file"
             total=$(cat "$search_list_file" | wc -l)
 
             if [ "$total" -eq 0 ]; then
@@ -235,7 +235,7 @@ delete_collection() {
 select_collection() {
     # Display list of collections and get selection
     show_add_button="$1"
-    find "$collections_dir" -type f -name "*txt" ! -name "map.txt" > "$collections_raw_file" 
+    find "$collections_dir" -type f -name "*txt" ! -name "map.txt" | sort > "$collections_raw_file" 
     sed -e "s|^$collections_dir/||" -e "s|\.txt$||" "$collections_raw_file" | jq -R -s 'split("\n")[:-1]' > "$collections_list_file"
 
     if [ "$show_add_button" = "add" ]; then
