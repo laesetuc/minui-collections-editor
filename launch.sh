@@ -34,7 +34,7 @@ add_new_collection() {
     minui-keyboard --title "Add new collection" --show-hardware-group --write-location "$minui_output_file" --disable-auto-sleep
     exit_code=$?
     if [ "$exit_code" -eq 0 ]; then
-        output=$(cat "$minui_output_file")
+        output=$(cat "$minui_output_file" 2>/dev/null)
         filename=$(echo "$output" | sed 's/[^a-zA-Z0-9_]//g')
         new_collection_file="$collections_dir"/"$filename".txt
 
@@ -52,7 +52,7 @@ add_new_collection() {
 }
 
 select_game_to_add() {
-    total=$(cat "$search_list_file" | wc -l)
+    total=$(cat "$search_list_file" 2>/dev/null | wc -l)
 
     if [ "$total" -eq 0 ]; then
         show_message "Could not find any games." 2
@@ -67,7 +67,7 @@ select_game_to_add() {
         minui-list --file "$results_list_file" --format json --write-location "$minui_output_file" --write-value state --disable-auto-sleep --title "Search: $search_term ($total results)"
         exit_code=$?
         if [ "$exit_code" -eq 0 ]; then
-            output=$(cat "$minui_output_file")
+            output=$(cat "$minui_output_file" 2>/dev/null)
             selected_index4="$(echo "$output" | jq -r '.selected')"
             file=$(sed -n "$((selected_index4 + 1))p" "$search_list_file")
 
@@ -92,68 +92,55 @@ add_game_to_collection() {
     # Add game to collection
     search_list_file="/tmp/search-list"
     results_list_file="/tmp/results-list"
-    previous_search_file="/tmp/search-term"
 
-    while true; do
-        search_term=$(cat "$previous_search_file")
+    # Get search term
+    minui-keyboard --title "Search" --initial-value "$search_term" --show-hardware-group --write-location "$minui_output_file" --disable-auto-sleep 
+    exit_code=$?
+    if [ "$exit_code" -eq 2 ] || [ "$exit_code" -eq 3 ]; then
+        >"$previous_search_file"
+        break
+    fi
+    if [ "$exit_code" -ne 0 ]; then
+        show_message "Error entering search term" 2
+        break
+    fi
+    search_term=$(cat "$minui_output_file" 2>/dev/null)
 
-        total=$(cat "$search_list_file" | wc -l)
-        if [ "$total" -eq 0 ]; then
+    # Perform search
+    show_message "Searching..."
 
-            # Get search term
-            minui-keyboard --title "Search" --initial-value "$search_term" --show-hardware-group --write-location "$minui_output_file" --disable-auto-sleep 
-            exit_code=$?
-            if [ "$exit_code" -eq 2 ] || [ "$exit_code" -eq 3 ]; then
-                >"$previous_search_file"
-                break
-            fi
-            if [ "$exit_code" -ne 0 ]; then
-                show_message "Error entering search term" 2
-                break
-            fi
-            search_term=$(cat "$minui_output_file")
-            echo "$search_term" > "$previous_search_file"
+    find "/mnt/SDCARD/Roms" -type f ! -path '*/\.*' -iname "*$search_term*" ! -name '*.txt' ! -name '*.log' > "$search_list_file"
+    total=$(cat "$search_list_file" 2>/dev/null | wc -l)
 
-            # Perform search
-            show_message "Searching..."
+    if [ "$total" -eq 0 ]; then
+        show_message "Could not find any games." 2
+    else
+        sed "$search_list_file" \
+            -e 's/^[^(]*(/(/' \
+            -e 's/)[^/]*\//) /' \
+            -e 's/[[:space:]]*$//' \
+            | jq -R -s 'split("\n")[:-1]' > "$results_list_file"
 
-            find "/mnt/SDCARD/Roms" -type f ! -path '*/\.*' -iname "*$search_term*" ! -name '*.txt' ! -name '*.log' > "$search_list_file"
-            total=$(cat "$search_list_file" | wc -l)
+        # Display list of games to add
+        minui-list --file "$results_list_file" --format json --write-location "$minui_output_file" --write-value state --disable-auto-sleep --title "Search: $search_term ($total results)"
+        exit_code=$?
+        if [ "$exit_code" -eq 0 ]; then
+            output=$(cat "$minui_output_file" 2>/dev/null)
+            selected_index4="$(echo "$output" | jq -r '.selected')"
+            file=$(sed -n "$((selected_index4 + 1))p" "$search_list_file")
 
-            if [ "$total" -eq 0 ]; then
-                show_message "Could not find any games." 2
+            filepath="${file#"$SDCARD_PATH"}"
+            rom_alias=$(get_rom_alias "$file")
+
+            if grep -q "$filepath" "$collection_file"; then
+                show_message "Game already in collection" 2
             else
-                sed "$search_list_file" \
-                    -e 's/^[^(]*(/(/' \
-                    -e 's/)[^/]*\//) /' \
-                    -e 's/[[:space:]]*$//' \
-                    | jq -R -s 'split("\n")[:-1]' > "$results_list_file"
 
-                # Display list of games to add and get selection
-                minui-list --file "$results_list_file" --format json --write-location "$minui_output_file" --write-value state --disable-auto-sleep --title "Search: $search_term ($total results)"
-                exit_code=$?
-                if [ "$exit_code" -eq 0 ]; then
-                    output=$(cat "$minui_output_file")
-                    selected_index4="$(echo "$output" | jq -r '.selected')"
-                    file=$(sed -n "$((selected_index4 + 1))p" "$search_list_file")
-
-                    filepath="${file#"$SDCARD_PATH"}"
-                    rom_alias=$(get_rom_alias "$file")
-
-                    if grep -q "$filepath" "$collection_file"; then
-                        show_message "Game already in collection" 2
-                    else
-
-                        echo "$filepath" >> "$collection_file"
-                        show_message "Added $rom_alias to $collection" 2
-                    fi
-                else
-                    >"$results_list_file"
-                    >"$search_list_file"
-                fi
+                echo "$filepath" >> "$collection_file"
+                show_message "Added $rom_alias to $collection" 2
             fi
         fi
-    done
+    fi
 }
 
 add_recent_to_collection() {
@@ -236,7 +223,7 @@ edit_games_in_collection() {
 
                 if [ "$exit_code" -eq 0 ]; then
                     # User selected item to edit
-                    output=$(cat "$minui_output_file")
+                    output=$(cat "$minui_output_file" 2>/dev/null)
                     selected_index2="$(echo "$output" | jq -r '.selected')"
 
                     case "$selected_index2" in
@@ -252,7 +239,7 @@ edit_games_in_collection() {
                             select_collection
                             exit_code=$?
                             if [ "$exit_code" -eq 0 ]; then
-                                output=$(cat "$minui_output_file")
+                                output=$(cat "$minui_output_file" 2>/dev/null)
                                 selected_index3="$(echo "$output" | jq -r '.selected')"
                                 new_collection=$(echo "$output" | jq -r '.""['"$selected_index3"'].name')
 
@@ -273,7 +260,7 @@ rename_collection() {
     minui-keyboard --title "Rename collection" --initial-value "$collection" --show-hardware-group --write-location "$minui_output_file" --disable-auto-sleep
     exit_code=$?
     if [ "$exit_code" -eq 0 ]; then
-        output=$(cat "$minui_output_file")
+        output=$(cat "$minui_output_file" 2>/dev/null)
         filename=$(echo "$output" | sed 's/[^a-zA-Z0-9_]//g')
         new_collection_file="$collections_dir"/"$filename".txt
 
@@ -361,11 +348,10 @@ main() {
 
         elif [ "$exit_code" -eq 0 ]; then
             # User selected item to edit
-            output=$(cat "$minui_output_file")
+            output=$(cat "$minui_output_file" 2>/dev/null)
             selected_index="$(echo "$output" | jq -r '.selected')"
             collection=$(echo "$output" | jq -r '.""['"$selected_index"'].name')
             collection_file=$(sed -n "$((selected_index + 1))p" "$collections_raw_file")
-            echo "$collection_file"
 
             while true; do
                 echo -e "Add game to collection|Add from recents to collection|Edit games in collection|Rename collection|Remove collection" | jq -R -s 'split("|")' > "$menu_file"
@@ -377,7 +363,7 @@ main() {
                     break
                 elif [ "$exit_code" -eq 0 ]; then
                     # User selected item to edit
-                    output=$(cat "$minui_output_file")
+                    output=$(cat "$minui_output_file" 2>/dev/null)
                     selected_index="$(echo "$output" | jq -r '.selected')"
 
                     case "$selected_index" in
