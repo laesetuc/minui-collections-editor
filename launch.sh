@@ -52,39 +52,33 @@ add_new_collection() {
 }
 
 select_game_to_add() {
-    total=$(cat "$search_list_file" 2>/dev/null | wc -l)
+    # Display list of games to add and get selection
+    sed "$search_list_file" \
+        -e 's/^[^(]*(/(/' \
+        -e 's/)[^/]*\//) /' \
+        -e 's/[[:space:]]*$//' \
+        | jq -R -s 'split("\n")[:-1]' > "$results_list_file"
 
-    if [ "$total" -eq 0 ]; then
-        show_message "Could not find any games." 2
-    else
-        sed "$search_list_file" \
-            -e 's/^[^(]*(/(/' \
-            -e 's/)[^/]*\//) /' \
-            -e 's/[[:space:]]*$//' \
-            | jq -R -s 'split("\n")[:-1]' > "$results_list_file"
+    minui-list --file "$results_list_file" --format json --write-location "$minui_output_file" --write-value state --disable-auto-sleep --title "Search: $search_term ($total results)"
+    exit_code=$?
+    if [ "$exit_code" -eq 0 ]; then
+        output=$(cat "$minui_output_file" 2>/dev/null)
+        selected_index4="$(echo "$output" | jq -r '.selected')"
+        file=$(sed -n "$((selected_index4 + 1))p" "$search_list_file")
 
-        # Display list of games to add and get selection
-        minui-list --file "$results_list_file" --format json --write-location "$minui_output_file" --write-value state --disable-auto-sleep --title "Search: $search_term ($total results)"
-        exit_code=$?
-        if [ "$exit_code" -eq 0 ]; then
-            output=$(cat "$minui_output_file" 2>/dev/null)
-            selected_index4="$(echo "$output" | jq -r '.selected')"
-            file=$(sed -n "$((selected_index4 + 1))p" "$search_list_file")
+        filepath="${file#"$SDCARD_PATH"}"
+        rom_alias=$(get_rom_alias "$file")
 
-            filepath="${file#"$SDCARD_PATH"}"
-            rom_alias=$(get_rom_alias "$file")
-
-            if grep -q "$filepath" "$collection_file"; then
-                show_message "Game already in collection" 2
-            else
-
-                echo "$filepath" >> "$collection_file"
-                show_message "Added $rom_alias to $collection" 2
-            fi
+        if grep -q "$filepath" "$collection_file"; then
+            show_message "Game already in collection" 2
         else
-            >"$results_list_file"
-            >"$search_list_file"
+
+            echo "$filepath" >> "$collection_file"
+            show_message "Added $rom_alias to $collection" 2
         fi
+    else
+        >"$results_list_file"
+        >"$search_list_file"
     fi
 }
 
@@ -115,54 +109,7 @@ add_game_to_collection() {
     if [ "$total" -eq 0 ]; then
         show_message "Could not find any games." 2
     else
-        sed "$search_list_file" \
-            -e 's/^[^(]*(/(/' \
-            -e 's/)[^/]*\//) /' \
-            -e 's/[[:space:]]*$//' \
-            | jq -R -s 'split("\n")[:-1]' > "$results_list_file"
-
-        # Display list of games to add
-        minui-list --file "$results_list_file" --format json --write-location "$minui_output_file" --write-value state --disable-auto-sleep --title "Search: $search_term ($total results)"
-        exit_code=$?
-        if [ "$exit_code" -eq 0 ]; then
-            output=$(cat "$minui_output_file" 2>/dev/null)
-            selected_index4="$(echo "$output" | jq -r '.selected')"
-            file=$(sed -n "$((selected_index4 + 1))p" "$search_list_file")
-
-            filepath="${file#"$SDCARD_PATH"}"
-            rom_alias=$(get_rom_alias "$file")
-
-            if grep -q "$filepath" "$collection_file"; then
-                show_message "Game already in collection" 2
-            else
-
-                echo "$filepath" >> "$collection_file"
-                show_message "Added $rom_alias to $collection" 2
-            fi
-        fi
-    fi
-}
-
-add_recent_to_collection() {
-    # Add last played game to collection
-    recents_file="/mnt/SDCARD/.userdata/shared/.minui/recent.txt"
-    if [ ! -s "$recents_file" ]; then
-        show_message "No recent games" 2
-    else
-        # Get last played game
-        rom_path=$(head -n 1 "$recents_file" | cut -d$'\t' -f1)
-        rom_alias=$(head -n 1 "$recents_file" | cut -d$'\t' -f2)
-
-        if [ ! -f "$SDCARD_PATH$rom_path" ]; then
-            show_message "Invalid game!" 2
-        else        
-            if grep -q "$rom_path" "$collection_file"; then
-                show_message "Game already in collection" 2
-            else
-                echo "$rom_path" >> "$collection_file"
-                show_message "Added $rom_alias to collection $collection" 2
-            fi
-        fi
+        select_game_to_add
     fi
 }
 
@@ -177,8 +124,13 @@ add_recents_to_collection() {
     else
         search_term="Recents"
         cut -d$'\t' -f1 "$recents_file" > "$search_list_file"
+        total=$(cat "$search_list_file" 2>/dev/null | wc -l)
 
-        select_game_to_add
+        if [ "$total" -eq 0 ]; then
+            show_message "Could not find any games." 2
+        else
+            select_game_to_add
+        fi
     fi
 }
 
