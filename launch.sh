@@ -82,7 +82,7 @@ select_game_to_add() {
     fi
 }
 
-add_game_to_collection() {
+search_game_to_collection() {
     # Add game to collection
     search_list_file="/tmp/search-list"
     results_list_file="/tmp/results-list"
@@ -110,6 +110,45 @@ add_game_to_collection() {
         show_message "Could not find any games." 2
     else
         select_game_to_add
+    fi
+}
+
+add_game_to_collection() {
+    emu_raw_file="/tmp/emu-raw"
+    emu_list_file="/tmp/emu-list"
+    search_list_file="/tmp/search-list"
+    results_list_file="/tmp/results-list"
+
+    find "/mnt/SDCARD/Roms" -type f ! -path '*/\.*' ! -name '*.txt' ! -name '*.log' | awk -F "/" '{print $5}' | sort -u > "$emu_raw_file"
+    cat "$emu_raw_file" | jq -R -s 'split("\n")[:-1]' > "$emu_list_file"
+    total=$(cat "$emu_list_file" 2>/dev/null | wc -l)
+
+    if [ "$total" -eq 0 ]; then
+        show_message "Could not find any games." 2
+    else
+        while true; do
+            minui-list --file "$emu_list_file" --format json --write-location "$minui_output_file" --write-value state --title "Add Games" --disable-auto-sleep
+            exit_code=$?
+
+            if [ "$exit_code" -eq 2 ] || [ "$exit_code" -eq 3 ]; then
+                # User pressed B or MENU button
+                break
+            elif [ "$exit_code" -eq 0 ]; then
+                # User selected item to edit
+                output=$(cat "$minui_output_file")
+                selected_index="$(echo "$output" | jq -r '.selected')"
+                selected_emu=$(sed -n "$((selected_index + 1))p" "$emu_raw_file")
+
+                find "/mnt/SDCARD/Roms/$selected_emu" -type f ! -path '*/\.*' ! -name '*.txt' ! -name '*.log' > "$search_list_file"
+                total=$(cat "$search_list_file" 2>/dev/null | wc -l)
+
+                if [ "$total" -eq 0 ]; then
+                    show_message "Could not find any games." 2
+                else
+                    select_game_to_add
+                fi
+            fi
+        done
     fi
 }
 
