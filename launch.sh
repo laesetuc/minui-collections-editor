@@ -83,7 +83,7 @@ select_game_to_add() {
 }
 
 search_game_collection() {
-    # Search for game to add to collection
+    # Add game to collection
     search_list_file="/tmp/search-list"
     results_list_file="/tmp/results-list"
 
@@ -136,7 +136,7 @@ add_game_to_collection() {
             elif [ "$exit_code" -eq 4 ]; then
                 # User pressed X button
                 search_game_collection
-
+                break
             elif [ "$exit_code" -eq 0 ]; then
                 # User selected item to edit
                 output=$(cat "$minui_output_file")
