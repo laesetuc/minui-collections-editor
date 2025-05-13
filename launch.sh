@@ -234,9 +234,13 @@ edit_games_in_collection() {
                                 selected_index3="$(echo "$output" | jq -r '.selected')"
                                 new_collection=$(echo "$output" | jq -r '.""['"$selected_index3"'].name')
 
-                                echo "$selected_game" >> "$collections_dir"/"$new_collection".txt
-                                rom_alias=$(get_rom_alias "$selected_game")
-                                show_message "Added $rom_alias to collection $new_collection" 2
+                                if grep -q "$selected_game" "$new_collection"; then
+                                    show_message "Game already in collection" 2
+                                else
+                                    echo "$selected_game" >> "$new_collection"
+                                    rom_alias=$(get_rom_alias "$selected_game")
+                                    show_message "Added $rom_alias to collection $new_collection" 2
+                                fi
                             fi
                             ;;
                     esac
