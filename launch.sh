@@ -35,7 +35,7 @@ add_new_collection() {
     exit_code=$?
     if [ "$exit_code" -eq 0 ]; then
         output=$(cat "$minui_output_file" 2>/dev/null)
-        filename=$(echo "$output" | sed 's/[^a-zA-Z0-9_]//g')
+        filename=$(echo "$output" | sed "s/[\,\.\"\'\!\@\#\$\%\^\&\*\{\}\=\;\:\<\>\/\?\`\~]//g")
         new_collection_file="$collections_dir"/"$filename".txt
 
         if [ -z "$filename" ]; then
@@ -220,8 +220,10 @@ edit_games_in_collection() {
                     case "$selected_index2" in
                         0)
                             # Remove game from collection
-                            cp "$collection_file" "$collection_file".disabled
-                            grep -v "$selected_game" "$collection_file".disabled > "$collection_file"
+                            #cp "$collection_file" "$collection_file".disabled
+                            #grep -v "$selected_game" "$collection_file".disabled > "$collection_file"
+                            sed "$((selected_index + 1))d" "$collection_file" > "$collection_file".tmp
+                            mv "$collection_file".tmp "$collection_file"
                             rom_alias=$(get_rom_alias "$selected_game")
                             show_message "Removed $rom_alias from $collection" 2
                             ;;
@@ -256,7 +258,7 @@ rename_collection() {
     exit_code=$?
     if [ "$exit_code" -eq 0 ]; then
         output=$(cat "$minui_output_file" 2>/dev/null)
-        filename=$(echo "$output" | sed 's/[^a-zA-Z0-9_]//g')
+        filename=$(echo "$output" | sed "s/[\,\.\"\'\!\@\#\$\%\^\&\*\{\}\=\;\:\<\>\/\?\`\~]//g")
         new_collection_file="$collections_dir"/"$filename".txt
 
         if [ -z "$filename" ]; then
