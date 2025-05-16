@@ -5,7 +5,7 @@
     "description": "An utility for editing MinUI game collections.",
     "author": "Cuteseal",
     "repo_url": "https://github.com/laesetuc/minui-collections-editor",
-    "release_filename": "Collections Editor.pak.zip",
+    "release_filename": "Collections.Editor.pak.zip",
     "platforms": [
       "tg5040"
     ],
