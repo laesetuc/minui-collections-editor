@@ -82,8 +82,8 @@ select_game_to_add() {
     fi
 }
 
-search_game_to_collection() {
-    # Add game to collection
+search_game_collection() {
+    # Search for game to add to collection
     search_list_file="/tmp/search-list"
     results_list_file="/tmp/results-list"
 
@@ -127,12 +127,16 @@ add_game_to_collection() {
         show_message "Could not find any games." 2
     else
         while true; do
-            minui-list --file "$emu_list_file" --format json --write-location "$minui_output_file" --write-value state --title "Add Games" --disable-auto-sleep
+            minui-list --file "$emu_list_file" --format json --write-location "$minui_output_file" --write-value state --title "Add Games" --disable-auto-sleep --action-button "X" --action-text "SEARCH"
             exit_code=$?
 
             if [ "$exit_code" -eq 2 ] || [ "$exit_code" -eq 3 ]; then
                 # User pressed B or MENU button
                 break
+            elif [ "$exit_code" -eq 4 ]; then
+                # User pressed X button
+                search_game_collection
+
             elif [ "$exit_code" -eq 0 ]; then
                 # User selected item to edit
                 output=$(cat "$minui_output_file")
@@ -173,83 +177,45 @@ add_recents_to_collection() {
     fi
 }
 
-edit_games_in_collection() {
-    # Edit games in collection
-    while true; do
-        # Get ROMs
-        collections_games_list="/tmp/collection-games-list"
-        
-        if [ ! -s "$collection_file" ]; then
-            show_message "Collection is empty" 2
-            break
-        else
-            # Get games in collection
-            sed "$collection_file" \
-                -e 's/^[^()]*(//' \
-                -e 's/)[^/]*\//) /' \
-                -e 's/\[[^]]*\]//g' \
-                -e 's/([^)]*)//g' \
-                -e 's/^/(/' \
-                -e 's/\.[^.]*$//' \
-                -e 's/[[:space:]]*$//' \
-                | jq -R -s 'split("\n")[:-1]' > "$collections_games_list"
-                                        
-            # Display Games List
-            minui-list --file "$collections_games_list" --format json --write-location "$minui_output_file" --write-value state --title "$collection" --disable-auto-sleep
-            exit_code=$?
+edit_collection() {
+    # Edit game in collection
+    echo -e "Add game to collection|Add recents to collection|Sort collection|Rename collection|Delete collection" | jq -R -s 'split("|")' > "$menu_file"
+    minui-list --file "$menu_file" --format json --write-location "$minui_output_file" --write-value state --title "$collection" --disable-auto-sleep
+    exit_code=$?
 
-            if [ "$exit_code" -eq 2 ] || [ "$exit_code" -eq 3 ]; then
-                # User pressed B or MENU button
+    if [ "$exit_code" -eq 2 ] || [ "$exit_code" -eq 3 ]; then
+        # User pressed B or MENU button
+        return
+    elif [ "$exit_code" -eq 0 ]; then
+        # User selected item to edit
+        output=$(cat "$minui_output_file")
+        selected_index="$(echo "$output" | jq -r '.selected')"
+
+        case "$selected_index" in
+            0)
+                # Add game to collection
+                add_game_to_collection
+                ;;
+            1)
+                # Add recents to collection
+                add_recents_to_collection
+                ;;
+            2)
+                # Sort collection
+                sort_collection
+                ;;
+            3)
+                # Rename collection
+                rename_collection
                 break
-            elif [ "$exit_code" -eq 0 ]; then
-                # User selected item to edit
-                output=$(cat "$minui_output_file")
-                selected_index="$(echo "$output" | jq -r '.selected')"
-                selected_game=$(sed -n "$((selected_index + 1))p" "$collection_file")
-
-                # Display Sub Menu
-                echo -e "Remove game from collection|Copy game to other collection" | jq -R -s 'split("|")' > "$menu_file"
-                minui-list --file "$menu_file" --format json --write-location "$minui_output_file" --write-value state --title "$collection" --disable-auto-sleep
-                exit_code=$?
-
-                if [ "$exit_code" -eq 0 ]; then
-                    # User selected item to edit
-                    output=$(cat "$minui_output_file" 2>/dev/null)
-                    selected_index2="$(echo "$output" | jq -r '.selected')"
-
-                    case "$selected_index2" in
-                        0)
-                            # Remove game from collection
-                            #cp "$collection_file" "$collection_file".disabled
-                            #grep -v "$selected_game" "$collection_file".disabled > "$collection_file"
-                            sed "$((selected_index + 1))d" "$collection_file" > "$collection_file".tmp
-                            mv "$collection_file".tmp "$collection_file"
-                            rom_alias=$(get_rom_alias "$selected_game")
-                            show_message "Removed $rom_alias from $collection" 2
-                            ;;
-                        1)
-                            # Copy game to other collection
-                            select_collection
-                            exit_code=$?
-                            if [ "$exit_code" -eq 0 ]; then
-                                output=$(cat "$minui_output_file" 2>/dev/null)
-                                selected_index3="$(echo "$output" | jq -r '.selected')"
-                                new_collection=$(echo "$output" | jq -r '.""['"$selected_index3"'].name')
-
-                                if grep -q "$selected_game" "$new_collection"; then
-                                    show_message "Game already in collection" 2
-                                else
-                                    echo "$selected_game" >> "$new_collection"
-                                    rom_alias=$(get_rom_alias "$selected_game")
-                                    show_message "Added $rom_alias to collection $new_collection" 2
-                                fi
-                            fi
-                            ;;
-                    esac
-                fi
-            fi
-        fi
-    done
+                ;;
+            4)
+                # Delete collection
+                delete_collection
+                break
+                ;;
+        esac
+    fi    
 }
 
 sort_collection() {
@@ -360,46 +326,80 @@ main() {
             collection_file=$(sed -n "$((selected_index + 1))p" "$collections_raw_file")
 
             while true; do
-                echo -e "Add game to collection|Add from recents to collection|Edit games in collection|Sort collection|Rename collection|Remove collection" | jq -R -s 'split("|")' > "$menu_file"
-                minui-list --file "$menu_file" --format json --write-location "$minui_output_file" --write-value state --title "$collection" --disable-auto-sleep
-                exit_code=$?
-
-                if [ "$exit_code" -eq 2 ] || [ "$exit_code" -eq 3 ]; then
-                    # User pressed B or MENU button
+                # Show games in collection
+                collections_games_list="/tmp/collection-games-list"
+                
+                if [ ! -s "$collection_file" ]; then
+                    show_message "Collection is empty" 1
+                    edit_collection
                     break
-                elif [ "$exit_code" -eq 0 ]; then
-                    # User selected item to edit
-                    output=$(cat "$minui_output_file" 2>/dev/null)
-                    selected_index="$(echo "$output" | jq -r '.selected')"
+                else
+                    # Get games in collection
+                    sed "$collection_file" \
+                        -e 's/^[^()]*(//' \
+                        -e 's/)[^/]*\//) /' \
+                        -e 's/\[[^]]*\]//g' \
+                        -e 's/([^)]*)//g' \
+                        -e 's/^/(/' \
+                        -e 's/\.[^.]*$//' \
+                        -e 's/[[:space:]]*$//' \
+                        | jq -R -s 'split("\n")[:-1]' > "$collections_games_list"
+                                                
+                    # Display Games List
+                    minui-list --file "$collections_games_list" --format json --write-location "$minui_output_file" --write-value state --title "$collection" --disable-auto-sleep  --action-button "X" --action-text "EDIT COLLECTION" 
+                    exit_code=$?
 
-                    case "$selected_index" in
-                        0)
-                            # Add game to collection
-                            add_game_to_collection
-                            ;;
-                        1)
-                            # Add last played game to collection
-                            add_recents_to_collection
-                            ;;
-                        2)
-                            # Edit games in collection
-                            edit_games_in_collection
-                            ;;
-                        3) 
-                            # Sort games in collection
-                            sort_collection
-                            ;;
-                        4)
-                            # Rename collection
-                            rename_collection
-                            break
-                            ;;
-                        5)
-                            # Delete collection
-                            delete_collection
-                            break
-                            ;;
-                    esac 
+                    if [ "$exit_code" -eq 2 ] || [ "$exit_code" -eq 3 ]; then
+                        # User pressed B or MENU button
+                        break
+                    elif [ "$exit_code" -eq 4 ]; then
+                        edit_collection
+
+                    elif [ "$exit_code" -eq 0 ]; then
+                        # User selected item to edit
+                        output=$(cat "$minui_output_file")
+                        selected_index="$(echo "$output" | jq -r '.selected')"
+                        selected_game=$(sed -n "$((selected_index + 1))p" "$collection_file")
+
+                        # Display Sub Menu
+                        echo -e "Remove game from collection|Copy game to other collection" | jq -R -s 'split("|")' > "$menu_file"
+                        minui-list --file "$menu_file" --format json --write-location "$minui_output_file" --write-value state --title "$collection" --disable-auto-sleep
+                        exit_code=$?
+
+                        if [ "$exit_code" -eq 0 ]; then
+                            # User selected item to edit
+                            output=$(cat "$minui_output_file" 2>/dev/null)
+                            selected_index2="$(echo "$output" | jq -r '.selected')"
+
+                            case "$selected_index2" in
+                                0)
+                                    # Remove game from collection
+                                    sed "$((selected_index + 1))d" "$collection_file" > "$collection_file".tmp
+                                    mv "$collection_file".tmp "$collection_file"
+                                    rom_alias=$(get_rom_alias "$selected_game")
+                                    show_message "Removed $rom_alias from $collection" 2
+                                    ;;
+                                1)
+                                    # Copy game to other collection
+                                    select_collection
+                                    exit_code=$?
+                                    if [ "$exit_code" -eq 0 ]; then
+                                        output=$(cat "$minui_output_file" 2>/dev/null)
+                                        selected_index3="$(echo "$output" | jq -r '.selected')"
+                                        new_collection=$(echo "$output" | jq -r '.""['"$selected_index3"'].name')
+
+                                        if grep -q "$selected_game" "$new_collection"; then
+                                            show_message "Game already in collection" 2
+                                        else
+                                            echo "$selected_game" >> "$new_collection"
+                                            rom_alias=$(get_rom_alias "$selected_game")
+                                            show_message "Added $rom_alias to collection $new_collection" 2
+                                        fi
+                                    fi
+                                    ;;
+                            esac
+                        fi
+                    fi
                 fi
             done
         fi
