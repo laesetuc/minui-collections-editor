@@ -252,6 +252,13 @@ edit_games_in_collection() {
     done
 }
 
+sort_collection() {
+    # Sort collection
+    cat "$collection_file" | sed 's|\(.*\)/|\1@|' | sort -t@ -k+2 | sed 's|@|/|' > "$collection_file".tmp
+    mv "$collection_file".tmp "$collection_file"
+    show_message "Collection sorted" 2
+}
+
 rename_collection() {
     # Rename collection
     minui-keyboard --title "Rename collection" --initial-value "$collection" --show-hardware-group --write-location "$minui_output_file" --disable-auto-sleep
@@ -314,6 +321,8 @@ cleanup() {
     rm -f /tmp/stay_awake
     rm -f "$collections_list_file"
     rm -f "$collections_raw_file"
+    rm -f "$emu_raw_file"
+    rm -f "$emu_list_file"
     rm -f "$menu_file"
     rm -f "$collections_games_list"
     rm -f "$minui_output_file"
@@ -351,7 +360,7 @@ main() {
             collection_file=$(sed -n "$((selected_index + 1))p" "$collections_raw_file")
 
             while true; do
-                echo -e "Add game to collection|Add from recents to collection|Edit games in collection|Rename collection|Remove collection" | jq -R -s 'split("|")' > "$menu_file"
+                echo -e "Add game to collection|Add from recents to collection|Edit games in collection|Sort collection|Rename collection|Remove collection" | jq -R -s 'split("|")' > "$menu_file"
                 minui-list --file "$menu_file" --format json --write-location "$minui_output_file" --write-value state --title "$collection" --disable-auto-sleep
                 exit_code=$?
 
@@ -376,12 +385,16 @@ main() {
                             # Edit games in collection
                             edit_games_in_collection
                             ;;
-                        3)
+                        3) 
+                            # Sort games in collection
+                            sort_collection
+                            ;;
+                        4)
                             # Rename collection
                             rename_collection
                             break
                             ;;
-                        4)
+                        5)
                             # Delete collection
                             delete_collection
                             break
