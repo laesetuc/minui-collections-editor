@@ -1,5 +1,5 @@
 # minui-collections-editor
-An utility for editing MinUI game collections
+A utility for editing MinUI game collections
 
 ## Requirements
 
