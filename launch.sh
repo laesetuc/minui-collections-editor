@@ -220,7 +220,7 @@ edit_collection() {
 
 sort_collection() {
     # Sort collection
-    cat "$collection_file" | sed 's|\(.*\)/|\1@|' | sort -t@ -k+2 | sed 's|@|/|' > "$collection_file".tmp
+    awk -F/ '{print tolower($NF) "@" $0}' "$collection_file" | sort -t@ -k1,1 | cut -d@ -f2- > "$collection_file".tmp
     mv "$collection_file".tmp "$collection_file"
     show_message "Collection sorted" 2
 }
