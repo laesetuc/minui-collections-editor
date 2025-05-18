@@ -387,11 +387,12 @@ main() {
                                         output=$(cat "$minui_output_file" 2>/dev/null)
                                         selected_index3="$(echo "$output" | jq -r '.selected')"
                                         new_collection=$(echo "$output" | jq -r '.""['"$selected_index3"'].name')
+                                        new_collection_file=$(sed -n "$((selected_index3 + 1))p" "$collections_raw_file")
 
-                                        if grep -q "$selected_game" "$new_collection"; then
+                                        if grep -q "$selected_game" "$new_collection_file"; then
                                             show_message "Game already in collection" 2
                                         else
-                                            echo "$selected_game" >> "$new_collection"
+                                            echo "$selected_game" >> "$new_collection_file"
                                             rom_alias=$(get_rom_alias "$selected_game")
                                             show_message "Added $rom_alias to collection $new_collection" 2
                                         fi
